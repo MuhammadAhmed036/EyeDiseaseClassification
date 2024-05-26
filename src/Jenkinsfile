@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+    environment {
+        NODE_VERSION = '16.x' // Specify the Node.js version
+    }
+    stages {
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Install Node.js') {
+            steps {
+                script {
+                    // Install Node.js
+                    sh 'curl -sL https://deb.nodesource.com/setup_$NODE_VERSION | bash -'
+                    sh 'sudo apt-get install -y nodejs'
+                }
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    // Install dependencies
+                    sh 'npm install'
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    // Build the React app
+                    sh 'npm run build'
+                }
+            }
+        }
+        stage('Deploy') {
+            steps {
+                script {
+                    def remoteDirectory = ""
+                    if (env.BRANCH_NAME == 'main') {
+                        remoteDirectory = '/var/www/html'
+                    } else if (env.BRANCH_NAME == 'feature_1') {
+                        remoteDirectory = '/var/www/html/feature_1'
+                    } else if (env.BRANCH_NAME == 'feature_2') {
+                        remoteDirectory = '/var/www/html/feature_2'
+                    }
+                    
+                    sshPublisher(
+                        publishers: [
+                            sshPublisherDesc(
+                                configName: 'ApacheServer',
+                                transfers: [
+                                    sshTransfer(
+                                        sourceFiles: 'build/**/*', // Transfer built files
+                                        remoteDirectory: remoteDirectory,
+                                        removePrefix: 'build', // Remove 'build' prefix from local path
+                                        execCommand: ''
+                                    )
+                                ],
+                                usePromotionTimestamp: false,
+                                useWorkspaceInPromotion: false,
+                                verbose: true
+                            )
+                        ]
+                    )
+                }
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Deployment succeeded!'
+        }
+        failure {
+            echo 'Deployment failed.'
+        }
+    }
+}
